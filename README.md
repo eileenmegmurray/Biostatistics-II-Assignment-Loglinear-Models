@@ -5,8 +5,8 @@
 **Date:** October 2025
 **Language:** R (R Markdown, knitted to HTML)
 
-> This was completed as a course assignment. Predictor variables were randomly assigned using a reproducible seed rather than chosen on substantive grounds, so the analysis is primarily a modeling exercise rather than a hypothesis-driven study.
-
+> This was completed as a course assignment. Predictor variables were randomly assigned using a reproducible seed rather than chosen on substantive grounds, so the analysis is a modeling exercise.
+> 
 ## Overview
 
 This project models a count outcome, the number of vegetables a respondent reported eating the previous day (`nutrition47`), using the 2019 NYC Community Health Survey (CHS). The assignment focused on choosing an appropriate count model when the data show overdispersion and excess zeros, then comparing unweighted and survey-weighted results.
