@@ -49,7 +49,7 @@ Overall, the results only partially supported the alternative hypothesis, and th
 | File | Description |
 |---|---|
 | `MurrayE_BIOS621_A2.Rmd` | R Markdown source code |
-| `MurrayE_BIOS621_A2_2.html` | Knitted report with code, output, tables, and figures |
+
 
 > GitHub displays HTML files as source code. To view the rendered report, download the file and open it in a browser, or enable GitHub Pages for this repository.
 
