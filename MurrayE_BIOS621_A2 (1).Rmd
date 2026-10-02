@@ -1,0 +1,392 @@
+---
+title: 'Assignment 2: Loglinear Models'
+author: "Eileen Murray"
+date: "2025-10-12"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+## About the Assignment
+
+For Assignment 2, I have been asked to utilize the 2019 Community Health Survey (CHS) dataset. I am expected to analyze the nutrition47 variable as an outcome variable (how many vegetables did you eat yesterday), but I am expected to choose my own predictor variables. 
+
+However, before I begin, I believe that it is firstly important to provide an overview of how the fact that the CHS is an annual survey from the New York City Department of Health and Mental Hygiene (DOHMH) that seeks to understand risk factors behind different diseases in the city. 
+
+## Recoding and Cleaning the Dataset
+I was first however ask to randomly  generate a reproducible number using this code:
+```{r}
+utf8ToInt("Eileen Murray") |>  # converts each character to an integer
+  sum() |>  #
+  set.seed() 
+```
+First, I will need to upload the dataset to R-Studio. This has been achieved in the code below:
+
+```{r, cache=TRUE}
+library(haven)
+chs19 <- read_sas("https://www1.nyc.gov/assets/doh/downloads/sas/episrv/chs2019_public.sas7bdat") 
+```
+
+Now I need to make sure I keep the correct columns:
+```{r}
+keepcols <- c("strata", "wt20_dual", "nutrition47")
+```
+I was then asked to get rid of the following columns, make a variable for administrative variables, and to create a variable that allows for different weights:
+
+```{r}
+# require a data use agreement
+donotuse <-
+  c(
+    "industry_groupnew",
+    "uhf34",
+    "borough",
+    "dphonew06",
+    "indpho",
+    "lowinchousing19",
+    "howlong19new",
+    "everevicted_q1",
+    "newgenderid19",
+    "nativeindig",
+    "demog183",
+    "demog135r",
+    "asianancestry",
+    "countrybirth19",
+    "bthregion2",
+    "demog192r",
+    "numadults2",
+    "occupation_groupnew"
+  )
+# administrative variables
+admvars <-
+  c("survey",
+    "strata_q1",
+    "cid",
+    "qxvers",
+    "wt20_dual_q1",
+    "wt_compare")
+# requiring different weights
+q1 <- grep("q1$", colnames(chs19), value = TRUE)
+```
+Now, I can view the columns that of which are available, and that I could use for my analysis of the predictors upon how many vegetables were eaten:
+```{r, message = FALSE}
+set.seed(16245)
+samplecols <- colnames(chs19)[!colnames(chs19) %in% c(keepcols, admvars, donotuse, q1)]
+(myrandomcols <- sample(samplecols, 4))
+```
+
+I set a seed so that the random predictor variables randomly sampled will yield to the same predictor variables each time. 
+
+The 4 predictors that of which I will be assessing their impact of nutrition47(how many vegetables were eaten yesterday) include emp3(employment status), everasthma(asthma diagnosis ever), checkedbdp19(checked blood pressure in the past 30 days), and mood6(In the past 30 days, how often did you feel worthless). 
+
+Based upon these predictors, I can now create my own data set and then begin to craft a null, and alternative hypothesis:
+```{r, message=FALSE}
+library(dplyr)
+mydata <- dplyr::select(chs19, keepcols, myrandomcols)
+mydata
+```
+
+**HA: Those who report ever having asthma, not feeling worthless, having checked their blood pressure (bp) and report being employed are more likely to report eating more vegetables.**
+**H0: There is no relationship between the predictors of ever having asthma, worthlessness feelings or lack thereof, checking blood pressure (bp), and employment upon the amount of vegetables an individual eats.**
+
+I will need to recode my variables before I can continue further:
+```{r}
+library(forcats)
+
+
+chs19_recode <- mydata %>%
+  mutate(
+    emp3 = case_when(
+      emp3 == 1 ~ "Employed",
+      emp3 == 2 ~ "Unemployed",
+      emp3 == 3 ~ "Not in labor force",
+      TRUE ~ NA_character_
+    ),
+    everasthma = case_when(
+      everasthma == 1 ~ "Yes",
+      everasthma == 2 ~ "No",
+      TRUE ~ NA_character_
+    ),
+    checkedbp19 = case_when(
+      checkedbp19 == 1 ~ "Yes",
+      checkedbp19 == 2 ~ "No",
+      TRUE ~ NA_character_
+    ),
+    mood6 = case_when(
+      mood6 == 1 ~ "All of the time",
+      mood6 == 2 ~ "Most of the time",
+      mood6 == 3 ~ "Some of the time",
+      mood6 == 4 ~ "A little of the time",
+      mood6 == 5 ~ "None of the time",
+      TRUE ~ NA_character_
+    ),
+    nutrition = as.numeric(nutrition47)
+  ) %>%
+  mutate(
+    across(
+      c(emp3, everasthma, checkedbp19, mood6),
+      ~ fct_na_value_to_level(as_factor(.x), level = "Missing")
+    )
+  )
+
+```
+
+
+## Epi1 Table
+Now I can begin creating my Epi 1 table that of which will provide me with basic summary statistics regarding the dataset. However, before I can do so, I will need to create labels, and add some captions as to make the Epi 1 table easier to understand:
+
+```{r}
+library(table1)
+
+label(chs19_recode$nutrition) <- "Vegetables Eaten Yesterday"
+label(chs19_recode$emp3) <- "Employment Status"
+label(chs19_recode$everasthma) <- "Ever Had Asthma"
+label(chs19_recode$checkedbp19) <- "Checked Blood Pressure (30 Days)"
+label(chs19_recode$mood6) <- "Felt Worthless (Past 30 Days)"
+
+table1(~ emp3 + everasthma + checkedbp19 + mood6 + nutrition, 
+       data = filter(chs19_recode, !is.na(nutrition)),
+       caption = "Table 1. Participant Characteristics and Number of Vegetables Consumed Yesterday")
+
+
+```
+
+**SUMMARY OF EPI 1 TABLE**:
+
+In the Epi 1 Table, we can see that the majority of participants reported being employed (57.6%), followed by those not in the labor force (35.2%). Additionally, most participants reported never having asthma (85.5%) and not checking their blood pressure in the past 30 days (65.7%). The majority also reported not feeling worthless (82.3%). These characteristics are important to note because they describe the participant population and highlight potential response bias. Specifically, individuals with certain characteristics were more likely to respond, which could influence the interpretation of our results.
+
+Regarding vegetable intake, participants reported consuming an average of 1.45 servings the previous day, with a median of 1 serving and a range from 0 to 50 servings. This is noteworthy because it indicates both a high frequency of zero servings and some extreme outliers. These features suggest that we should consider a model that can account for excess zeros to properly address dispersion caused by zero inflation.
+
+We can further examine this by comparing the mean variance of the outcome variable to calculate the fraction of the counts that are zero:
+
+```{r}
+meanvar_by_predictors <- chs19_recode %>%
+  filter(!is.na(nutrition)) %>%
+  summarise(
+    n = n(),
+    mean_nutrition = mean(nutrition, na.rm = TRUE),
+    var_nutrition  = var(nutrition, na.rm = TRUE),
+    frac_zero_nutrition = sum(nutrition == 0, na.rm = TRUE) / n,
+    .groups = "drop"
+  )
+meanvar_by_predictors
+```
+As seen, the mean serving was about 1.45 with a variance of 2.78, and a fraction zero of about 0.20. As the variance is clearly largely than the mean, this suggest over dispersion thus suggesting a Poisson regression may be inappropriate Furthermore  the fraction of zeroes yielding to about 20% is relatively high thus indicating a need to consider a zero-inflation model.
+
+The histogram below better highlights the overdispersion, and high fraction of zeroes thus creating a right-skew within the data:
+
+```{r}
+library(ggplot2)
+chs19_recode %>%
+  filter(!is.na(nutrition)) %>%
+  ggplot(aes(x = nutrition)) +
+  geom_histogram(binwidth = 0.5, fill = "darkkhaki", color = "darkslategrey") +
+  labs(title = "Distribution of Number of Vegetable Cups", x = "Number of Vegetable Cups", y = "Count") +
+  theme_linedraw()
+
+```
+
+
+## Assessing the predictors for multicollinearity 
+In any dataset, we want to assess for multicollinearity as it yields to inflated inflated variance thus impacting our analysis, and results.
+
+I can assess predictors for multicolinearity by creating a model matrix of these variables, and then applying the "cor" function. This is executed in the code below:
+```{r}
+mm <- model.matrix(~ emp3 + everasthma + checkedbp19 + mood6, data = chs19_recode)
+cor(mm)
+```
+Of note, when I applied the correlation function, I received the warning "cor(mm) : the standard deviation is zero". This likely occurred because the correlation matrix included a column for the intercept, which has no variation.
+
+Since a column with zero variance does not affect our assessment of multicollinearity—and in fact hinders a comprehensive evaluation—it is important to remove it. Additionally, there were NA values in that column, which the code below also addresses. Because our goal here is simply to assess correlations, handling these issues does not impact our subsequent analyses. The code below implements these adjustments
+
+```{r}
+zero_var_cols <- apply(mm[, -1], 2, function(x) var(x) == 0)
+zero_var_cols
+mm_filtered <- mm[, -1][, !zero_var_cols]
+cor_matrix_filtered <- cor(mm_filtered)
+
+```
+Upon assessing the output, the variables with the highest correlations were emp3Employed versus emp3Unemployed at -0.30, and checkedbp19Missing with everasthmaMissing at 0.12. While these variables are correlated, the values are not high enough to indicate a problem (i.e., nowhere near 1.0). As noted earlier, the only “high” correlations observed were between different levels of the same variable. Based on this assessment, there is no concern for multicollinearity.
+
+We can further visualize this using a heat map:
+```{r}
+library("RColorBrewer")
+col <- colorRampPalette(brewer.pal(10, "RdYlBu"))(256)
+library(pheatmap)
+pheatmap(cor_matrix_filtered, 
+         scale = "none", 
+         col = col,
+         clustering_distance_cols = "correlation",
+         clustering_distance_rows = "correlation")
+```
+As seen in the map, high correlations are indicated by dark blue shading. However, as discussed earlier—and as the map demonstrates—the variables showing high correlation are simply different levels of the same variable. Therefore, there appears to be no multicollinearity among the predictor variables, and we do not expect inflated variance from this. With this confirmed, we can proceed with fitting the models.
+
+## Fitting the uneweighted log-linear models 
+Now I can test out different log-linear models to see which may be the best fit based upon the data thus far. However, I will start with the poisson log-linear model since the outcome variable is count data that of which is typically accounted for in the poisson log-linear model. But I will also assess the negative binomial, and zero-inflation Poisson and negative binomial models as well.
+
+In the following section, I will compare the models using the Akaike Information Criterion (AIC) and diagnostic plots to determine which model is the appropriate, and describe in greater depth as to why. However, for this section, I will explain the purpose of why each model is normally selected.
+
+First as discussed, I am going to fit the data to a poisson log-linear model as it is count data. However, as mentioned in the previous section there appears to be over-dispersion, and zeros thus indicating a poisson model may not be appropriate.
+**Poisson log-linear**:
+```{r}
+fit.pois <- glm(nutrition ~ emp3 + everasthma + checkedbp19 + mood6,
+                data = chs19_recode,
+                family = poisson(link = "log"))
+```
+
+
+Now, I will fit the model to a negative binomial model that of which as mentioned is typically used when there is over dispersion in the poisson model. However, the negative binomial does not address for inflation due to too many zero counts.
+**Negative Binomial**:
+```{r}
+library(MASS)
+fit.negbin <- glm.nb(nutrition ~ emp3 + everasthma + checkedbp19 + mood6,
+                     data = chs19_recode)
+```
+
+
+Now I can attempt to fit a zero-inflation models for both the poisson and negative binomial distributions. These models are oft used when there is an excess of zeroes. 
+**ZI Poisson Log-linear**: 
+```{r}
+library(pscl)
+fit.ZIpoisfull <- zeroinfl(nutrition ~ emp3 + everasthma + checkedbp19 + mood6,
+                           data = chs19_recode,
+                           dist = "poisson")
+```
+**ZI Negative binomial**:
+```{r}
+fit.ZInegbinfull <- zeroinfl(nutrition ~ emp3 + everasthma + checkedbp19 + mood6,
+                             data = chs19_recode,
+                             dist = "negbin")
+```
+
+
+## Model selection and Interpretation
+To select the most apropirate model, I can compare the log-likelihoods and AIC values of each model:
+```{r}
+listoffits <-
+  list(
+    pois = fit.pois,
+    negbin = fit.negbin,
+    ZIpois = fit.ZIpoisfull,
+    ZInegbin = fit.ZInegbinfull
+  )
+lapply(listoffits, logLik)
+sapply(listoffits, AIC)
+```
+The output provides the log-likelihood values and degrees of freedom. To determine the most appropriate model, we want to consider the Akaike Information Criterion (AIC), where lower values indicate a better fit. The AIC balances model fit and complexity, aiming to find the best-fitting model without overfitting. The formula for AIC is:
+
+$$
+AIC = -2 \times \text{log-likelihood} + 2k
+$$
+
+where $k$ is the number of estimated parameters (the df shown in the log-likelihood output). The $2k$ term is the penalty for model complexity.
+
+Using this formula, the standard negative binomial model, with a log-likelihood of -13310.9 and 13 parameters, gives an AIC of approximately 26648, the lowest AIC among the models. The zero-inflation (ZI) negative binomial model has a slightly higher log-likelihood (-13308.22), but it estimates 25 parameters, which gives it an AIC of approximately 26666. In other words, the improvement in fit from adding the zero-inflation component is not large enough to justify the 12 additional parameters. Both Poisson models had much higher AIC values (approximately 27129 for the Poisson and 27147 for the ZI Poisson), which is consistent with the overdispersion observed earlier.
+
+This is somewhat surprising, as we observed earlier that about 20% of responses were zero, which suggested that a zero-inflation model may be needed. However, the negative binomial model appears to account for these zeros adequately on its own.
+
+
+I can also further check this with my diagnostic plots:
+```{r}
+plotpanel1 <- function(model, main = "") {
+  res <- residuals(model, type = "response")
+  fit <- fitted(model)
+  
+  plot(fit, res,
+       xlab = "Fitted values",
+       ylab = "Response Residuals",
+       main = main,
+       pch = 20, col = "steelblue")
+  abline(h = 0, lty = 2, col = "red")
+}
+
+plotpanel2 <- function(model, main = "") {
+  res <- residuals(model, type = "response")
+  qqnorm(res,
+         main = main,
+         pch = 20, col = "darkgreen")
+  qqline(res, col = "red", lty = 2)
+}
+
+
+par(mfrow = c(1, 2))  
+
+plotpanel1(fit.ZInegbinfull, main = "ZINB: Residuals vs Fitted")
+plotpanel2(fit.ZInegbinfull, main = "ZINB: QQ Plot of Residuals")
+
+```
+Although the zero-inflation model accounts for excess zeros, the residuals are not randomly scattered and instead appear to cluster around 0. The Q-Q plot shows a similar issue, with heavier tails indicating that the residuals do not follow a normal distribution. Some extreme outliers (e.g., 50 vegetable servings) may have influenced the data overall, which is concerning.
+
+Given this, it makes sense to also visually assess the standard negative binomial model, which had the lowest AIC.
+
+```{r}
+par(mfrow = c(1, 2))  
+
+plotpanel1(fit.negbin, main = "NB: Residuals vs Fitted")
+plotpanel2(fit.negbin, main = "NB: QQ Plot of Residuals")
+```
+Unlike the zero-inflated negative binomial model, the residuals and fitted values plot for the standard negative binomial model show less clustering, and the Q-Q plot exhibits a less pronounced heavy tail. Earlier, we observed that about 20% of the responses were zero, which is relatively high. However, given the reduced clustering and the closer-to-normal residuals, the negative binomial model may be more appropriate than the zero-inflated alternative. This agrees with the AIC comparison, in which the negative binomial model had the lowest AIC. Overall, the standard negative binomial model appears to be the most suitable choice.
+
+
+## Mutlivariate Regression Using Survey Weights & Appropriate Model
+First, let's run the negative binomial multivariate regression unweighted: 
+
+```{r}
+uwsum <-summary(fit.negbin)
+uwsum
+exp(coef(fit.negbin))
+exp(confint(fit.negbin))
+```
+Based on the output from the unweighted model, being employed was positively associated with greater vegetable intake, as indicated by its estimate of 0.153, narrow 95% confidence intervals (0.110, 0.196), and a p-value well below the alpha threshold of 0.05. In contrast, checking blood pressure in the past month was significantly negatively associated with vegetable intake, with an estimate of -0.056, 95% confidence intervals (-0.098, -0.014), and a p-value also well below the alpha threshold.
+
+Interestingly, several levels of the mood variable “feeling worthless”—a little of the time, most of the time, and all of the time—also appeared to be significantly associated with decreased vegetable intake, while feeling worthless some of the time was not (p = 0.081). Of these, feeling worthless a little of the time and most of the time were particularly significant, with p-values of 0.00167 and 0.00516, respectively. Notably, feeling worthless most of the time and all of the time had the largest negative associations, with nearly identical estimates of about -0.255.
+
+Overall, the unweighted model does not fully support the alternative hypothesis, as employment was the only predictor consistently and positively associated with vegetable intake. The mixed significance across the different levels of the mood variable suggests that mood may not have a meaningful influence on vegetable intake. Additionally, checking blood pressure showed a significant negative association. While these results highlight some associations, the evidence is not strong enough to reject the null hypothesis that the predictors have no relationship with vegetable intake.
+
+Now, let's apply the survey weights to the model. Of note, the svyglm() function in the survey package does not support the negative binomial distribution. Therefore, I used the quasi-Poisson family instead, which also accounts for overdispersion by estimating a dispersion parameter, so it remains appropriate for this data:
+```{r}
+library(survey)
+
+chs.dsgn <- svydesign(
+  ids = ~1,
+  strata = ~strata,
+  weights = ~wt20_dual,
+  data = chs19_recode,
+  nest = TRUE
+)
+
+fit_weighted_qp <- svyglm(
+  nutrition ~ emp3 + everasthma + checkedbp19 + mood6,
+  design = chs.dsgn,
+  family = quasipoisson()   
+)
+
+summary(fit_weighted_qp)
+confint(fit_weighted_qp)
+```
+Employment consistently appears to be positively and significantly associated with vegetable intake, as evident from its estimate of 0.16858 (95% CI: 0.101, 0.236) and p-value of 9.57e-07, well below the alpha-level threshold. As "Not in labor force" is the reference category for employment status, this means that employed participants reported eating more vegetables than those not in the labor force.
+
+When accounting for survey weights, other significant predictors emerge. For example, missing blood pressure values are significantly negatively associated with vegetable intake (estimate = -0.47001, 95% CI: -0.621, -0.319, p = 1.12e-09). However, missing employment status was not significantly associated with vegetable intake (estimate = -0.12462, p = 0.401).
+
+Interestingly, unlike the unweighted model, the mood variable “Feeling worthless most of the time” is the only mood category that is significantly associated with vegetable intake in the weighted model (estimate = -0.23012, 95% CI: -0.454, -0.006, p = 0.0443).
+
+The significant association between vegetable intake and missing blood pressure values is noteworthy. There is no immediately apparent reason why those who did not report whether they checked their blood pressure would eat fewer vegetables. This pattern may suggest some underlying bias in the data, where non-response could be linked to lower vegetable consumption.
+
+## Significant Associations & Intepretations of the data
+
+Let us revisit, the null and alternative hypothesis from earlier:
+
+
+**HA: Those who report ever having asthma, not feeling worthless, having checked their bp and report being employed are more likely to report eating more vegetables.**
+
+**H0: There is no relationship between the predictors of ever having asthma, worthlessness feelings or lack thereof, checking bdp, and employment upon the amount of vegetables an individual eats.**
+
+Between the two models, employment status was consistently and significantly associated with vegetable intake. In the unweighted model, being employed was positively associated with greater vegetable intake, as shown by its estimate of 0.153, narrow 95% confidence intervals (0.110 to 0.196), and p-value well below the alpha threshold. In the weighted model, this relationship remained, with an estimate of 0.16858 (95% CI: 0.101 to 0.236) and a p-value of 9.57e-07. In both models, this comparison is between employed participants and those not in the labor force, which is the reference category.
+
+Regarding mood, reporting feeling worthless most of the time was negatively and significantly associated with vegetable intake in both models. In the weighted model, this was the only mood variable significantly associated (p = 0.0443) with an estimate of -0.23012 (95% CI: -0.454 to -0.006). In the unweighted model, feeling worthless “a little of the time” or “most of the time” also showed significant negative associations, though the extreme values may have influenced the apparent effect. This suggests the unweighted model may overstate mood effects due to value extremes.
+
+Checking blood pressure and ever having asthma did not show positive associations with vegetable intake. In the unweighted model, checking blood pressure was actually negatively associated with vegetable intake (estimate = -0.056, 95% CI: -0.098 to -0.014, p < 0.05). In the weighted model, respondents who did not report whether they checked their blood pressure also showed a significant negative association with vegetable intake. Ever having asthma, and asthma-related variables in general, showed no significant associations in either model.
+
+In summary, the models only partially support the alternative hypothesis: employment is significantly and positively associated with vegetable intake, while many other predictors (asthma, mood, some health behaviors) show weak or no association, consistent with the null. Therefore, the null is not fully rejected.
+
+However, the weighted model highlights an interesting pattern: non-r
